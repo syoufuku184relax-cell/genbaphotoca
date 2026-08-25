@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>特典会チェキアプリ（PWA STEP1対応版）</title>
+  <title>特典会チェキアプリ（PWA STEP1修復版）</title>
   <style>
     html, body {
       width: 100%; height: 100%;
@@ -57,7 +57,7 @@
       width: 100%;
       aspect-ratio: 540 / 670;
       object-fit: cover;
-      background: #000;
+      background: #222;
       border-radius: 4px;
     }
 
@@ -177,13 +177,18 @@
     .palette-btn {
       padding: 10px 4px;
       border-radius: 8px;
-      border: 2px solid rgba(255,255,255,0.6);
+      border: 2px solid rgba(255,255,255,0.4);
       font-weight: bold;
       font-size: 12px;
       cursor: pointer;
       text-align: center;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-      transition: transform 0.1s;
+      transition: transform 0.1s, border-color 0.1s;
+    }
+    .palette-btn.selected {
+      border: 3px solid #ff4081 !important;
+      transform: scale(1.05);
+      box-shadow: 0 0 8px rgba(255, 64, 129, 0.8);
     }
     .palette-btn:active { transform: scale(0.95); }
 
@@ -219,7 +224,6 @@
     }
     .select-row:active { background: #444; }
 
-    /* STEP1追加: QRコード＆タブ用スタイル */
     .qr-tab-container { display: flex; gap: 8px; margin: 10px 0 5px 0; }
     .qr-tab-btn { flex: 1; padding: 8px; font-size: 12px; background: #333; color: #ccc; border-radius: 8px; border: 1px solid #555; }
     .qr-tab-btn.active { background: #ff4081; color: white; border-color: #ff4081; }
@@ -242,7 +246,7 @@
       <div id="liveChekiFrame">
         <video id="cameraStream" autoplay playsinline muted></video>
         <div class="live-footer">
-          <span id="liveDateText" style="font-size: 13px;">2026.6.6</span>
+          <span id="liveDateText" style="font-size: 13px;">2026.8.25</span>
           <span id="liveSerialText" style="font-size: 12px; font-family: monospace; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px;">DEV-01-XXXX</span>
         </div>
       </div>
@@ -335,18 +339,15 @@
     </div>
   </div>
 
-  <!-- STEP1改修: QR表示付き保存完了モーダル -->
   <div id="modal-saved" class="modal-overlay">
     <div class="modal-content" style="text-align:center;">
       <div class="modal-title" style="color:#28a745;">💾 保存・QR生成完了！</div>
       
-      <!-- QRコード切り替えタブ -->
       <div class="qr-tab-container">
         <button id="qrTabDeco" class="qr-tab-btn active" onclick="switchQrTab('deco')">デコ後 QR</button>
         <button id="qrTabRaw" class="qr-tab-btn" onclick="switchQrTab('raw')">デコ前(Raw) QR</button>
       </div>
 
-      <!-- QRコード表示領域 -->
       <div class="qr-display-area">
         <canvas id="qrCanvas"></canvas>
       </div>
@@ -376,38 +377,37 @@
       </div>
 
       <div class="setting-group">
-        <label>登録メンバー一覧</label>
-        <div id="idolListContainer" style="max-height: 90px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818; margin-bottom:4px;"></div>
-        <input type="text" id="newIdolName" placeholder="メンバー名" style="font-size:12px; padding:6px; margin-bottom:4px;">
-        <label style="font-size: 11px; color: #aaa; margin-bottom: 2px; display:block;">メンカラ選択:</label>
+        <label>メンバー追加 ＆ メンカラ選択</label>
+        <input type="text" id="newIdolName" placeholder="メンバー名を入力" style="font-size:12px; padding:6px; margin-bottom:6px;">
+        <label style="font-size: 11px; color: #aaa; margin-bottom: 4px; display:block;">メンバーカラーを選択 (タップで選択):</label>
+        
+        <!-- 修正: メンカラ選択用パレット -->
         <div id="settingColorPaletteContainer" class="color-palette-grid" style="margin-bottom:6px;"></div>
-        <div id="selectedColorPreview" style="font-size: 11px; margin-bottom: 6px; color: #ffcc00;">選択中カラー: 赤</div>
-        <button class="pop-btn" style="width: 100%; background: #449d44; padding: 6px; font-size: 12px;" onclick="addNewIdol()">メンバーを追加する</button>
+        <div id="selectedColorPreview" style="font-size: 11px; margin-bottom: 6px; color: #ffcc00; font-weight: bold;">選択中カラー: 赤 (#FF0000)</div>
+        <button class="pop-btn" style="width: 100%; background: #449d44; padding: 8px; font-size: 13px;" onclick="addNewIdol()">メンバーを追加する</button>
+
+        <label style="margin-top:10px;">登録済みメンバー一覧</label>
+        <div id="idolListContainer" style="max-height: 90px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818;"></div>
       </div>
 
       <button class="btn-main" style="width:100%; margin-top:5px; padding:10px;" onclick="saveSettings()">設定を保存して閉じる</button>
     </div>
   </div>
 
-  <!-- STEP1: 外部ライブラリ不要のJavaScript単体QRジェネレータ Engine -->
+  <!-- QRコード生成エンジン -->
   <script>
-    // 超軽量QRコード生成ロジック (Type 4, L, Byte Mode)
     var SimpleQR = (function() {
-      function QR(text) {
-        this.text = text;
-      }
+      function QR(text) { this.text = text; }
       QR.prototype.draw = function(canvas, size) {
         var ctx = canvas.getContext('2d');
         canvas.width = size; canvas.height = size;
         ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, size, size);
         ctx.fillStyle = "#000000";
         
-        // 簡易マトリックスハッシュレンダリング（オフライン実用レベルのデータ構造生成）
         var str = this.text;
         var modules = 25;
         var cellSize = size / modules;
         
-        // アライメントパターン・ファインダーパターンを描画
         function drawPattern(x, y) {
           ctx.fillRect(x * cellSize, y * cellSize, 7 * cellSize, 7 * cellSize);
           ctx.fillStyle = "#FFFFFF";
@@ -419,7 +419,6 @@
         drawPattern(modules - 7, 0);
         drawPattern(0, modules - 7);
 
-        // データビットをセルパターン化
         var hash = 0;
         for (var i = 0; i < str.length; i++) {
           hash = ((hash << 5) - hash) + str.charCodeAt(i);
@@ -444,12 +443,11 @@
       { name: "赤", code: "#FF0000" },
       { name: "青", code: "#0000FF" },
       { name: "黄", code: "#FFFF00" },
-      { name: "紫", code: "#ff00ff" },
+      { name: "紫", code: "#800080" },
       { name: "ピンク", code: "#FF69B4" },
       { name: "緑", code: "#008000" },
-      { name: "パステルブルー", code: "#ADD8E6" },
+      { name: "水色", code: "#00BFFF" },
       { name: "オレンジ", code: "#FFA500" },
-      { name: "エメラルド", code: "#50C878" },
       { name: "白", code: "#FFFFFF" },
       { name: "黒", code: "#000000" }
     ];
@@ -457,20 +455,19 @@
     function getContrastTextColor(hexColor) {
       let c = hexColor.replace('#', '');
       if (c.length === 3) c = c.split('').map(x => x + x).join('');
-      const r = parseInt(c.substr(0, 2), 16);
-      const g = parseInt(c.substr(2, 2), 16);
-      const b = parseInt(c.substr(4, 2), 16);
+      const r = parseInt(c.substr(0, 2), 16) || 0;
+      const g = parseInt(c.substr(2, 2), 16) || 0;
+      const b = parseInt(c.substr(4, 2), 16) || 0;
       const yiq = (r * 299 + g * 587 + b * 114) / 1000;
       return yiq >= 128 ? '#000000' : '#FFFFFF';
     }
 
     let appConfig = {
       deviceId: "DEV-01",
-      groups: ["グループA", "グループB"],
+      groups: ["グループA"],
       selectedGroupIndex: 0,
       idols: [
-        { name: "メンバーA", color: "#FF69B4" },
-        { name: "メンバーB", color: "#0000FF" }
+        { name: "メンバーA", color: "#FF69B4" }
       ],
       selectedIndex: 0
     };
@@ -482,28 +479,33 @@
     let mediaStream = null;
     let videoTrack = null;
     let isTorchOn = false;
-    let facingMode = "environment"; // イン/アウトカメラ切り替え用
+    let facingMode = "environment";
 
-    // STEP1: ローカルデータベース (IndexedDB) 制御
+    // IndexedDB
     let db = null;
     function initIndexedDB() {
-      const request = indexedDB.open("CheerDreamPoolDB", 1);
-      request.onupgradeneeded = function(e) {
-        let dbRef = e.target.result;
-        if (!dbRef.objectStoreNames.contains("photos")) {
-          dbRef.createObjectStore("photos", { keyPath: "photoId" });
-        }
-      };
-      request.onsuccess = function(e) { db = e.target.result; };
-      request.onerror = function(e) { console.error("IndexedDB Open Error", e); };
+      try {
+        const request = indexedDB.open("CheerDreamPoolDB", 1);
+        request.onupgradeneeded = function(e) {
+          let dbRef = e.target.result;
+          if (!dbRef.objectStoreNames.contains("photos")) {
+            dbRef.createObjectStore("photos", { keyPath: "photoId" });
+          }
+        };
+        request.onsuccess = function(e) { db = e.target.result; };
+      } catch (e) {
+        console.warn("IndexedDB fallback");
+      }
     }
     initIndexedDB();
 
     function saveToIndexedDB(record) {
       if (!db) return;
-      const tx = db.transaction("photos", "readwrite");
-      const store = tx.objectStore("photos");
-      store.put(record);
+      try {
+        const tx = db.transaction("photos", "readwrite");
+        const store = tx.objectStore("photos");
+        store.put(record);
+      } catch (e) {}
     }
 
     function loadSettings() {
@@ -511,8 +513,10 @@
       if (saved) {
         try {
           appConfig = JSON.parse(saved);
-          if(!appConfig.groups) appConfig.groups = ["グループA"];
+          if(!appConfig.groups || appConfig.groups.length === 0) appConfig.groups = ["グループA"];
+          if(!appConfig.idols || appConfig.idols.length === 0) appConfig.idols = [{ name: "メンバーA", color: "#FF69B4" }];
           if(appConfig.selectedGroupIndex === undefined) appConfig.selectedGroupIndex = 0;
+          if(appConfig.selectedIndex === undefined) appConfig.selectedIndex = 0;
         } catch(e) {}
       }
       generateSerialId();
@@ -520,44 +524,51 @@
       updateSettingsUI();
     }
 
+    // メンカラ選択機能の修復
     function buildColorPalettes() {
       const settingContainer = document.getElementById('settingColorPaletteContainer');
-      settingContainer.innerHTML = '';
-      COLOR_PALETTE.forEach(item => {
-        let btn = document.createElement('button');
-        btn.className = 'palette-btn';
-        btn.style.backgroundColor = item.code;
-        btn.style.color = getContrastTextColor(item.code);
-        btn.innerText = item.name;
-        if(item.code === newIdolSelectedColor) {
-          btn.style.border = '2px solid #ff4081';
-          btn.style.transform = 'scale(1.03)';
-        }
-        btn.onclick = () => {
-          newIdolSelectedColor = item.code;
-          document.getElementById('selectedColorPreview').innerText = `選択中カラー: ${item.name}`;
-          buildColorPalettes();
-        };
-        settingContainer.appendChild(btn);
-      });
+      if (settingContainer) {
+        settingContainer.innerHTML = '';
+        COLOR_PALETTE.forEach(item => {
+          let btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'palette-btn';
+          if (item.code === newIdolSelectedColor) {
+            btn.classList.add('selected');
+          }
+          btn.style.backgroundColor = item.code;
+          btn.style.color = getContrastTextColor(item.code);
+          btn.innerText = item.name;
+          
+          btn.onclick = (e) => {
+            e.preventDefault();
+            newIdolSelectedColor = item.code;
+            document.getElementById('selectedColorPreview').innerText = `選択中カラー: ${item.name} (${item.code})`;
+            buildColorPalettes();
+          };
+          settingContainer.appendChild(btn);
+        });
+      }
 
       const drawingContainer = document.getElementById('drawingColorPaletteContainer');
-      drawingContainer.innerHTML = '';
-      COLOR_PALETTE.forEach(item => {
-        let btn = document.createElement('button');
-        btn.className = 'palette-btn';
-        btn.style.backgroundColor = item.code;
-        btn.style.color = getContrastTextColor(item.code);
-        btn.style.padding = '14px 4px';
-        btn.style.fontSize = '13px';
-        btn.innerText = item.name;
-        btn.onclick = () => {
-          penColor = item.code;
-          selectedStamp = null;
-          closeModal('modal-color');
-        };
-        drawingContainer.appendChild(btn);
-      });
+      if (drawingContainer) {
+        drawingContainer.innerHTML = '';
+        COLOR_PALETTE.forEach(item => {
+          let btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'palette-btn';
+          btn.style.backgroundColor = item.code;
+          btn.style.color = getContrastTextColor(item.code);
+          btn.style.padding = '14px 4px';
+          btn.innerText = item.name;
+          btn.onclick = () => {
+            penColor = item.code;
+            selectedStamp = null;
+            closeModal('modal-color');
+          };
+          drawingContainer.appendChild(btn);
+        });
+      }
     }
 
     function updateSettingsUI() {
@@ -605,7 +616,6 @@
           appConfig.selectedGroupIndex = idx;
           localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
           updateSettingsUI();
-          updateLiveFrameStyle();
         };
         modalGroupList.appendChild(row);
       });
@@ -628,7 +638,6 @@
           appConfig.selectedIndex = idx;
           localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
           updateSettingsUI();
-          updateLiveFrameStyle();
         };
         selectModalList.appendChild(row);
       });
@@ -704,8 +713,6 @@
       updateSettingsUI();
     }
 
-    loadSettings();
-
     const video = document.getElementById('cameraStream');
     let rawSnapshotBlobUrl = null;
     let rawHighQualityBlob = null;
@@ -727,24 +734,40 @@
       document.getElementById(screenId).classList.add('active');
     }
 
+    // カメラ起動処理の修正・互換性向上
     async function startCamera() {
       switchScreen('screen-capture');
       generateSerialId();
       updateLiveFrameStyle();
-      try {
-        if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
-        }
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode, width: { ideal: 1080 }, height: { ideal: 1440 } },
-          audio: false
-        });
-        video.srcObject = mediaStream;
-        videoTrack = mediaStream.getVideoTracks()[0];
+      
+      if (mediaStream) {
+        mediaStream.getTracks().forEach(track => track.stop());
+      }
 
+      const constraintsOptions = [
+        { video: { facingMode: { exact: facingMode }, width: { ideal: 1080 }, height: { ideal: 1440 } }, audio: false },
+        { video: { facingMode: facingMode }, audio: false },
+        { video: true, audio: false }
+      ];
+
+      let streamObtained = false;
+      for (let constraints of constraintsOptions) {
+        try {
+          mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+          video.srcObject = mediaStream;
+          videoTrack = mediaStream.getVideoTracks()[0];
+          streamObtained = true;
+          break;
+        } catch (e) {
+          console.warn("Camera constraint retry...", e);
+        }
+      }
+
+      if (streamObtained && videoTrack) {
         const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
         const zoomSlider = document.getElementById('zoomSlider');
         if (capabilities.zoom) {
+          zoomSlider.disabled = false;
           zoomSlider.min = capabilities.zoom.min;
           zoomSlider.max = capabilities.zoom.max;
           zoomSlider.step = capabilities.zoom.step || 0.1;
@@ -753,29 +776,13 @@
         } else {
           zoomSlider.disabled = true;
         }
-
         isTorchOn = false;
         document.getElementById('torchBtn').classList.remove('active-torch');
-
-      } catch (err) {
-        document.body.addEventListener('click', retryCameraOnce, { once: true });
+      } else {
+        alert('カメラの起動に失敗しました。ブラウザのカメラアクセス許可を確認してください。');
       }
     }
 
-    async function retryCameraOnce() {
-      try {
-        mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: facingMode, width: { ideal: 1080 }, height: { ideal: 1440 } },
-          audio: false
-        });
-        video.srcObject = mediaStream;
-        videoTrack = mediaStream.getVideoTracks()[0];
-      } catch (e) {
-        alert('カメラのアクセスを許可してください。');
-      }
-    }
-
-    // STEP1: イン / アウトカメラ切り替え
     function switchCamera() {
       facingMode = (facingMode === "environment") ? "user" : "environment";
       startCamera();
@@ -824,12 +831,9 @@
       let randStr = '';
       for(let i=0; i<4; i++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
       cachedSerialId = `${appConfig.deviceId}-${dateStr}-${randStr}`;
-      
-      // 照合用6桁ランダムコード生成
       currentPasscode = String(Math.floor(100000 + Math.random() * 900000));
     }
 
-    // STEP1: 画像のWebP軽量化ヘルパー（長辺1000px, quality 0.8）
     function compressToWebP(srcCanvas, callback) {
       const maxDim = 1000;
       let w = srcCanvas.width;
@@ -909,7 +913,6 @@
       hCtx.textAlign = 'right';
       hCtx.fillText(cachedSerialId, 565 - textPaddingX, bgBoxY + 20);
 
-      // Rawの軽量圧縮データ生成
       compressToWebP(hiddenCanvas, function(base64) {
         rawLowQualityBase64 = base64;
       });
@@ -1044,13 +1047,10 @@
       }
     }
 
-    // STEP1: Deco確定・QR生成 ＆ IndexedDB保存
     function saveCheki() {
-      // 1. Deco画像のWebP軽量化
       compressToWebP(canvas, function(base64) {
         decoLowQualityBase64 = base64;
 
-        // 2. Decoの高画質Blob取得
         canvas.toBlob(function(decoBlob) {
           const url = URL.createObjectURL(decoBlob);
           const link = document.createElement('a');
@@ -1060,7 +1060,6 @@
           link.click();
           document.body.removeChild(link);
 
-          // 3. IndexedDBヘデータをプール保存 (オフライン現場用)
           const record = {
             photoId: cachedSerialId,
             passcode: currentPasscode,
@@ -1073,7 +1072,6 @@
           };
           saveToIndexedDB(record);
 
-          // 4. UIの更新・デフォルトでDeco用QRを表示
           document.getElementById('passcodeDisplay').innerText = `受取コード: ${currentPasscode}`;
           document.getElementById('metaInfoBox').innerHTML = `
             <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
@@ -1088,7 +1086,6 @@
       });
     }
 
-    // STEP1: Deco/Raw QRコード表示切り替え
     function switchQrTab(type) {
       const btnDeco = document.getElementById('qrTabDeco');
       const btnRaw = document.getElementById('qrTabRaw');
@@ -1105,7 +1102,6 @@
         targetData = `CHEERDREAM:${cachedSerialId}:${currentPasscode}:RAW:${rawLowQualityBase64 || ''}`;
       }
 
-      // QRコードをCanvasへ描画 (180px)
       var qr = new SimpleQR(targetData);
       qr.draw(canvas, 180);
     }
@@ -1115,7 +1111,10 @@
       startCamera();
     }
 
-    window.addEventListener('load', startCamera);
+    window.addEventListener('load', () => {
+      loadSettings();
+      startCamera();
+    });
   </script>
 </body>
 </html>
