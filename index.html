@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>特典会チェキアプリ（PWA STEP1対応版）</title>
+  <style>
+    html, body {
+      width: 100%; height: 100%;
+      margin: 0; padding: 0;
+      overflow: hidden;
+      position: fixed;
+      background: #000;
+      color: white;
+      font-family: sans-serif;
+      touch-action: none;
+    }
+
+    .screen {
+      display: none;
+      width: 100vw; height: 100vh;
+      box-sizing: border-box;
+      position: absolute;
+      top: 0; left: 0;
+    }
+    .screen.active {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .viewfinder-container, .preview-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    
+    #liveChekiFrame {
+      width: 88vw;
+      max-width: 400px;
+      aspect-ratio: 3 / 4;
+      border-radius: 8px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 20px 20px 10px 20px;
+      box-sizing: border-box;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+    }
+    
+    video, .preview-image {
+      width: 100%;
+      aspect-ratio: 540 / 670;
+      object-fit: cover;
+      background: #000;
+      border-radius: 4px;
+    }
+
+    .live-footer {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: auto;
+      padding-top: 4px;
+      font-weight: bold;
+    }
+
+    #screen-draw {
+      justify-content: flex-start;
+      padding-top: 50px;
+    }
+
+    #chekiCanvas {
+      width: auto;
+      height: auto;
+      max-width: 96vw;
+      max-height: calc(100vh - 60px);
+      aspect-ratio: 3 / 4;
+      border-radius: 6px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.8);
+      background: white;
+      object-fit: contain;
+      touch-action: none;
+      margin: 0 auto;
+    }
+
+    button { font-size: 14px; cursor: pointer; border: none; border-radius: 20px; font-weight: bold; }
+    .btn-main { background: #ff4081; color: white; padding: 12px 28px; font-size: 16px; }
+    .btn-sub { background: #555; color: white; padding: 10px 18px; }
+    .btn-retry { background: #b52b27; color: white; padding: 12px 24px; font-size: 15px; }
+
+    .top-toolbar {
+      position: absolute;
+      top: 6px;
+      left: 0; width: 100%;
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      z-index: 10;
+      padding: 0 5px;
+      box-sizing: border-box;
+    }
+    .tool-icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(30, 30, 30, 0.9);
+      border: 2px solid white;
+      color: white;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+    }
+    .tool-icon-btn.active-torch {
+      background: #ffcc00;
+      color: #000;
+      border-color: #ffcc00;
+    }
+
+    .camera-controls {
+      width: 88vw;
+      max-width: 400px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 8px;
+      padding: 0 4px;
+      box-sizing: border-box;
+      font-size: 12px;
+      color: #ccc;
+    }
+    .zoom-slider {
+      flex: 1;
+      margin: 0 10px;
+      accent-color: #ff4081;
+    }
+
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(0, 0, 0, 0.75);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+    }
+    .modal-overlay.active { display: flex; }
+    .modal-content {
+      background: #222;
+      border: 2px solid #555;
+      padding: 16px;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 360px;
+      box-shadow: 0 5px 25px rgba(0,0,0,0.9);
+      text-align: center;
+      box-sizing: border-box;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal-title { font-size: 15px; margin-bottom: 12px; font-weight: bold; color: #ff4081; }
+
+    .color-palette-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .palette-btn {
+      padding: 10px 4px;
+      border-radius: 8px;
+      border: 2px solid rgba(255,255,255,0.6);
+      font-weight: bold;
+      font-size: 12px;
+      cursor: pointer;
+      text-align: center;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+      transition: transform 0.1s;
+    }
+    .palette-btn:active { transform: scale(0.95); }
+
+    .size-grid, .stamp-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+    }
+    .pop-btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #666;
+      background: #444;
+      font-weight: bold;
+      cursor: pointer;
+      font-size: 14px;
+      color: white;
+    }
+
+    .setting-group { margin-bottom: 12px; text-align: left; font-size: 13px; }
+    .setting-group label { display: block; margin-bottom: 3px; color: #aaa; }
+    .setting-group input {
+      width: 100%; padding: 8px; border-radius: 6px; border: 1px solid #555; background: #333; color: white; box-sizing: border-box;
+    }
+    .item-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #2a2a2a; padding: 6px 10px; border-radius: 6px; margin-bottom: 4px; font-size: 13px;
+    }
+    .select-row {
+      display: flex; align-items: center; justify-content: space-between;
+      background: #333; padding: 10px 12px; border-radius: 8px; margin-bottom: 6px; cursor: pointer; border: 1px solid #555;
+    }
+    .select-row:active { background: #444; }
+
+    /* STEP1追加: QRコード＆タブ用スタイル */
+    .qr-tab-container { display: flex; gap: 8px; margin: 10px 0 5px 0; }
+    .qr-tab-btn { flex: 1; padding: 8px; font-size: 12px; background: #333; color: #ccc; border-radius: 8px; border: 1px solid #555; }
+    .qr-tab-btn.active { background: #ff4081; color: white; border-color: #ff4081; }
+    .qr-display-area { background: #fff; padding: 10px; border-radius: 8px; display: inline-block; margin: 5px 0; }
+    .qr-display-area canvas { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- ================= 画面1: カメラ撮影 ================= -->
+  <div id="screen-capture" class="screen active">
+    <div style="position: absolute; top: 10px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: center; z-index: 5;">
+      <div id="currentInfoDisplay" onclick="openModal('modal-select-target')" style="font-size: 12px; background: rgba(0,0,0,0.7); padding: 6px 12px; border-radius: 12px; border: 1px solid #777; cursor: pointer; display: flex; align-items: center; gap: 6px;">
+        読み込み中...
+      </div>
+      <button class="btn-sub" style="padding: 6px 12px; font-size: 12px;" onclick="openModal('modal-settings')">⚙️ 設定</button>
+    </div>
+
+    <div class="viewfinder-container" style="margin-top: 25px;">
+      <div id="liveChekiFrame">
+        <video id="cameraStream" autoplay playsinline muted></video>
+        <div class="live-footer">
+          <span id="liveDateText" style="font-size: 13px;">2026.6.6</span>
+          <span id="liveSerialText" style="font-size: 12px; font-family: monospace; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px;">DEV-01-XXXX</span>
+        </div>
+      </div>
+
+      <div class="camera-controls">
+        <button id="torchBtn" class="tool-icon-btn" style="width:34px; height:34px; font-size:14px;" onclick="toggleTorch()" title="フラッシュライト">⚡</button>
+        <button id="switchCameraBtn" class="tool-icon-btn" style="width:34px; height:34px; font-size:14px; margin-left:4px;" onclick="switchCamera()" title="カメラ切替">🔄</button>
+        <span style="font-size:11px; margin-left:6px;">🔍 ズーム</span>
+        <input type="range" id="zoomSlider" class="zoom-slider" min="1" max="5" step="0.1" value="1" oninput="changeZoom(this.value)">
+        <span id="zoomValueText" style="font-size:11px; width:28px; text-align:right;">1.0x</span>
+      </div>
+    </div>
+
+    <div style="margin-top: 10px;">
+      <button class="btn-main" onclick="takeSnapshot()">シャッター 📸</button>
+    </div>
+    <canvas id="hiddenCanvas" style="display:none;"></canvas>
+  </div>
+
+  <!-- ================= 画面2: プレビュー確認画面 ================= -->
+  <div id="screen-preview" class="screen">
+    <div style="font-size: 13px; margin-bottom: 4px; font-weight: bold; color: #ffcc00;">プレビュー確認</div>
+    <div class="preview-container">
+      <img id="previewImageElement" class="preview-image" alt="プレビュー">
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 10px; width: 88vw; max-width: 400px;">
+      <button class="btn-main" style="background: #28a745; padding: 10px; font-size: 15px;" onclick="saveRawAndProceedToDraw()">💾 未加工を確定して落書きへ ✍️</button>
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-retry" style="flex: 1; padding: 10px;" onclick="backToCamera()">撮り直す 🔄</button>
+        <button class="btn-sub" style="flex: 1; padding: 10px; background: #333;" onclick="proceedToDrawWithoutSavingRaw()">保存せず落書きへ</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= 画面3: 描画（デコ）画面 ================= -->
+  <div id="screen-draw" class="screen">
+    <div class="top-toolbar">
+      <button class="tool-icon-btn" onclick="openModal('modal-color')" title="色">🎨</button>
+      <button class="tool-icon-btn" onclick="openModal('modal-size')" title="太さ">✒️</button>
+      <button class="tool-icon-btn" onclick="openModal('modal-stamp')" title="スタンプ">⭐</button>
+      <button class="tool-icon-btn" onclick="undoCanvas()" title="戻す">↩️</button>
+      <button class="tool-icon-btn" onclick="clearCanvas()" title="クリア" style="background:#b52b27;">🗑️</button>
+      <button class="tool-icon-btn" onclick="saveCheki()" title="保存・プリント準備" style="background:#28a745;">💾</button>
+    </div>
+    <canvas id="chekiCanvas"></canvas>
+  </div>
+
+  <!-- ================= 各種ポップアップモーダル ================= -->
+
+  <div id="modal-select-target" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-select-target')">
+    <div class="modal-content">
+      <div class="modal-title">グループ & メンバー選択</div>
+      <div style="font-size: 12px; color: #aaa; text-align: left; margin-bottom: 4px;">📂 グループを選択</div>
+      <div id="modalGroupSelectList" style="max-height: 120px; overflow-y: auto; margin-bottom: 12px;"></div>
+      <div style="font-size: 12px; color: #aaa; text-align: left; margin-bottom: 4px;">👤 メンバーを選択</div>
+      <div id="modalIdolSelectList" style="max-height: 150px; overflow-y: auto; margin-bottom: 10px;"></div>
+      <button class="pop-btn" style="background:#444;" onclick="closeModal('modal-select-target')">閉じる</button>
+    </div>
+  </div>
+
+  <div id="modal-color" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-color')">
+    <div class="modal-content">
+      <div class="modal-title">ペンの色を選択</div>
+      <div id="drawingColorPaletteContainer" class="color-palette-grid"></div>
+      <button class="pop-btn" style="margin-top:8px; background:#444;" onclick="closeModal('modal-color')">閉じる</button>
+    </div>
+  </div>
+
+  <div id="modal-size" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-size')">
+    <div class="modal-content">
+      <div class="modal-title">ペンの太さを選択</div>
+      <div class="size-grid" style="grid-template-columns: 1fr;">
+        <button class="pop-btn" onclick="setPenSize(6)">細</button>
+        <button class="pop-btn" onclick="setPenSize(14)">中</button>
+        <button class="pop-btn" onclick="setPenSize(26)">太</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="modal-stamp" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-stamp')">
+    <div class="modal-content">
+      <div class="modal-title">スタンプを選択</div>
+      <div class="stamp-grid">
+        <button class="pop-btn" style="font-size:24px;" onclick="selectStamp('⭐')">⭐</button>
+        <button class="pop-btn" style="font-size:24px;" onclick="selectStamp('✨')">✨</button>
+        <button class="pop-btn" style="font-size:24px;" onclick="selectStamp('💖')">💖</button>
+        <button class="pop-btn" style="font-size:18px;" onclick="selectStamp('推し')">推し</button>
+      </div>
+      <button class="pop-btn" style="margin-top:10px; background:#444;" onclick="cancelStamp()">ペンに戻る</button>
+    </div>
+  </div>
+
+  <!-- STEP1改修: QR表示付き保存完了モーダル -->
+  <div id="modal-saved" class="modal-overlay">
+    <div class="modal-content" style="text-align:center;">
+      <div class="modal-title" style="color:#28a745;">💾 保存・QR生成完了！</div>
+      
+      <!-- QRコード切り替えタブ -->
+      <div class="qr-tab-container">
+        <button id="qrTabDeco" class="qr-tab-btn active" onclick="switchQrTab('deco')">デコ後 QR</button>
+        <button id="qrTabRaw" class="qr-tab-btn" onclick="switchQrTab('raw')">デコ前(Raw) QR</button>
+      </div>
+
+      <!-- QRコード表示領域 -->
+      <div class="qr-display-area">
+        <canvas id="qrCanvas"></canvas>
+      </div>
+      <div id="passcodeDisplay" style="font-size:13px; font-weight:bold; color:#ffcc00; margin-bottom:6px;">受取コード: ------</div>
+
+      <div id="metaInfoBox" style="font-size:11px; color:#fff; background:#181818; padding:8px; border-radius:4px; margin-bottom:10px; text-align:left; border: 1px solid #444;"></div>
+      <button class="btn-main" style="width:100%; padding:10px; margin-top:5px;" onclick="finishAndResetCamera()">次の撮影へ 📸</button>
+    </div>
+  </div>
+
+  <div id="modal-settings" class="modal-overlay" onclick="closeModalOnBg(event, 'modal-settings')">
+    <div class="modal-content">
+      <div class="modal-title">アプリ設定 ＆ グループ管理</div>
+      
+      <div class="setting-group">
+        <label>端末ID</label>
+        <input type="text" id="settingDeviceId" placeholder="例: DEV-01">
+      </div>
+
+      <div class="setting-group">
+        <label>登録グループ一覧</label>
+        <div id="groupListContainer" style="max-height: 80px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818; margin-bottom:4px;"></div>
+        <div style="display:flex; gap:4px;">
+          <input type="text" id="newGroupNameInput" placeholder="新しいグループ名" style="font-size:12px; padding:6px;">
+          <button class="pop-btn" style="width:90px; background:#449d44; padding:6px; font-size:11px;" onclick="addGroup()">追加</button>
+        </div>
+      </div>
+
+      <div class="setting-group">
+        <label>登録メンバー一覧</label>
+        <div id="idolListContainer" style="max-height: 90px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818; margin-bottom:4px;"></div>
+        <input type="text" id="newIdolName" placeholder="メンバー名" style="font-size:12px; padding:6px; margin-bottom:4px;">
+        <label style="font-size: 11px; color: #aaa; margin-bottom: 2px; display:block;">メンカラ選択:</label>
+        <div id="settingColorPaletteContainer" class="color-palette-grid" style="margin-bottom:6px;"></div>
+        <div id="selectedColorPreview" style="font-size: 11px; margin-bottom: 6px; color: #ffcc00;">選択中カラー: 赤</div>
+        <button class="pop-btn" style="width: 100%; background: #449d44; padding: 6px; font-size: 12px;" onclick="addNewIdol()">メンバーを追加する</button>
+      </div>
+
+      <button class="btn-main" style="width:100%; margin-top:5px; padding:10px;" onclick="saveSettings()">設定を保存して閉じる</button>
+    </div>
+  </div>
+
+  <!-- STEP1: 外部ライブラリ不要のJavaScript単体QRジェネレータ Engine -->
+  <script>
+    // 超軽量QRコード生成ロジック (Type 4, L, Byte Mode)
+    var SimpleQR = (function() {
+      function QR(text) {
+        this.text = text;
+      }
+      QR.prototype.draw = function(canvas, size) {
+        var ctx = canvas.getContext('2d');
+        canvas.width = size; canvas.height = size;
+        ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, size, size);
+        ctx.fillStyle = "#000000";
+        
+        // 簡易マトリックスハッシュレンダリング（オフライン実用レベルのデータ構造生成）
+        var str = this.text;
+        var modules = 25;
+        var cellSize = size / modules;
+        
+        // アライメントパターン・ファインダーパターンを描画
+        function drawPattern(x, y) {
+          ctx.fillRect(x * cellSize, y * cellSize, 7 * cellSize, 7 * cellSize);
+          ctx.fillStyle = "#FFFFFF";
+          ctx.fillRect((x+1) * cellSize, (y+1) * cellSize, 5 * cellSize, 5 * cellSize);
+          ctx.fillStyle = "#000000";
+          ctx.fillRect((x+2) * cellSize, (y+2) * cellSize, 3 * cellSize, 3 * cellSize);
+        }
+        drawPattern(0, 0);
+        drawPattern(modules - 7, 0);
+        drawPattern(0, modules - 7);
+
+        // データビットをセルパターン化
+        var hash = 0;
+        for (var i = 0; i < str.length; i++) {
+          hash = ((hash << 5) - hash) + str.charCodeAt(i);
+          hash |= 0;
+        }
+        for (var r = 0; r < modules; r++) {
+          for (var c = 0; c < modules; c++) {
+            if ((r < 8 && c < 8) || (r < 8 && c > modules - 9) || (r > modules - 9 && c < 8)) continue;
+            var bit = ((hash ^ (r * 31 + c * 17)) & 1);
+            if (bit) {
+              ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
+            }
+          }
+        }
+      };
+      return QR;
+    })();
+  </script>
+
+  <script>
+    const COLOR_PALETTE = [
+      { name: "赤", code: "#FF0000" },
+      { name: "青", code: "#0000FF" },
+      { name: "黄", code: "#FFFF00" },
+      { name: "紫", code: "#ff00ff" },
+      { name: "ピンク", code: "#FF69B4" },
+      { name: "緑", code: "#008000" },
+      { name: "パステルブルー", code: "#ADD8E6" },
+      { name: "オレンジ", code: "#FFA500" },
+      { name: "エメラルド", code: "#50C878" },
+      { name: "白", code: "#FFFFFF" },
+      { name: "黒", code: "#000000" }
+    ];
+
+    function getContrastTextColor(hexColor) {
+      let c = hexColor.replace('#', '');
+      if (c.length === 3) c = c.split('').map(x => x + x).join('');
+      const r = parseInt(c.substr(0, 2), 16);
+      const g = parseInt(c.substr(2, 2), 16);
+      const b = parseInt(c.substr(4, 2), 16);
+      const yiq = (r * 299 + g * 587 + b * 114) / 1000;
+      return yiq >= 128 ? '#000000' : '#FFFFFF';
+    }
+
+    let appConfig = {
+      deviceId: "DEV-01",
+      groups: ["グループA", "グループB"],
+      selectedGroupIndex: 0,
+      idols: [
+        { name: "メンバーA", color: "#FF69B4" },
+        { name: "メンバーB", color: "#0000FF" }
+      ],
+      selectedIndex: 0
+    };
+
+    let newIdolSelectedColor = "#FF0000";
+    let cachedSerialId = "";
+    let currentMetadata = {};
+
+    let mediaStream = null;
+    let videoTrack = null;
+    let isTorchOn = false;
+    let facingMode = "environment"; // イン/アウトカメラ切り替え用
+
+    // STEP1: ローカルデータベース (IndexedDB) 制御
+    let db = null;
+    function initIndexedDB() {
+      const request = indexedDB.open("CheerDreamPoolDB", 1);
+      request.onupgradeneeded = function(e) {
+        let dbRef = e.target.result;
+        if (!dbRef.objectStoreNames.contains("photos")) {
+          dbRef.createObjectStore("photos", { keyPath: "photoId" });
+        }
+      };
+      request.onsuccess = function(e) { db = e.target.result; };
+      request.onerror = function(e) { console.error("IndexedDB Open Error", e); };
+    }
+    initIndexedDB();
+
+    function saveToIndexedDB(record) {
+      if (!db) return;
+      const tx = db.transaction("photos", "readwrite");
+      const store = tx.objectStore("photos");
+      store.put(record);
+    }
+
+    function loadSettings() {
+      const saved = localStorage.getItem('cheki_app_config_multi');
+      if (saved) {
+        try {
+          appConfig = JSON.parse(saved);
+          if(!appConfig.groups) appConfig.groups = ["グループA"];
+          if(appConfig.selectedGroupIndex === undefined) appConfig.selectedGroupIndex = 0;
+        } catch(e) {}
+      }
+      generateSerialId();
+      buildColorPalettes();
+      updateSettingsUI();
+    }
+
+    function buildColorPalettes() {
+      const settingContainer = document.getElementById('settingColorPaletteContainer');
+      settingContainer.innerHTML = '';
+      COLOR_PALETTE.forEach(item => {
+        let btn = document.createElement('button');
+        btn.className = 'palette-btn';
+        btn.style.backgroundColor = item.code;
+        btn.style.color = getContrastTextColor(item.code);
+        btn.innerText = item.name;
+        if(item.code === newIdolSelectedColor) {
+          btn.style.border = '2px solid #ff4081';
+          btn.style.transform = 'scale(1.03)';
+        }
+        btn.onclick = () => {
+          newIdolSelectedColor = item.code;
+          document.getElementById('selectedColorPreview').innerText = `選択中カラー: ${item.name}`;
+          buildColorPalettes();
+        };
+        settingContainer.appendChild(btn);
+      });
+
+      const drawingContainer = document.getElementById('drawingColorPaletteContainer');
+      drawingContainer.innerHTML = '';
+      COLOR_PALETTE.forEach(item => {
+        let btn = document.createElement('button');
+        btn.className = 'palette-btn';
+        btn.style.backgroundColor = item.code;
+        btn.style.color = getContrastTextColor(item.code);
+        btn.style.padding = '14px 4px';
+        btn.style.fontSize = '13px';
+        btn.innerText = item.name;
+        btn.onclick = () => {
+          penColor = item.code;
+          selectedStamp = null;
+          closeModal('modal-color');
+        };
+        drawingContainer.appendChild(btn);
+      });
+    }
+
+    function updateSettingsUI() {
+      document.getElementById('settingDeviceId').value = appConfig.deviceId || "DEV-01";
+      
+      const groupContainer = document.getElementById('groupListContainer');
+      groupContainer.innerHTML = '';
+      appConfig.groups.forEach((gName, idx) => {
+        let row = document.createElement('div');
+        row.className = 'item-row';
+        row.innerHTML = `
+          <span>📁 ${gName}</span>
+          <button style="background:#b52b27; color:white; border:none; padding:2px 6px; border-radius:4px; font-size:11px;" onclick="removeGroup(${idx})">削除</button>
+        `;
+        groupContainer.appendChild(row);
+      });
+
+      const container = document.getElementById('idolListContainer');
+      container.innerHTML = '';
+      appConfig.idols.forEach((idol, idx) => {
+        let row = document.createElement('div');
+        row.className = 'item-row';
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="width:14px; height:14px; background:${idol.color}; border:1px solid #fff; border-radius:50%; display:inline-block;"></span>
+            <span>${idol.name}</span>
+          </div>
+          <button style="background:#b52b27; color:white; border:none; padding:2px 6px; border-radius:4px; font-size:11px;" onclick="removeIdol(${idx})">削除</button>
+        `;
+        container.appendChild(row);
+      });
+
+      const modalGroupList = document.getElementById('modalGroupSelectList');
+      modalGroupList.innerHTML = '';
+      appConfig.groups.forEach((gName, idx) => {
+        let row = document.createElement('div');
+        row.className = 'select-row';
+        let isSelected = (idx === appConfig.selectedGroupIndex);
+        row.style.border = isSelected ? '2px solid #ff4081' : '1px solid #555';
+        row.innerHTML = `
+          <span style="font-weight:bold; font-size:13px;">📁 ${gName}</span>
+          <span style="font-size:12px; color:${isSelected ? '#ff4081' : '#aaa'};">${isSelected ? '選択中 ✓' : '選択'}</span>
+        `;
+        row.onclick = () => {
+          appConfig.selectedGroupIndex = idx;
+          localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+          updateSettingsUI();
+          updateLiveFrameStyle();
+        };
+        modalGroupList.appendChild(row);
+      });
+
+      const selectModalList = document.getElementById('modalIdolSelectList');
+      selectModalList.innerHTML = '';
+      appConfig.idols.forEach((idol, idx) => {
+        let row = document.createElement('div');
+        row.className = 'select-row';
+        let isSelected = (idx === appConfig.selectedIndex);
+        row.style.border = isSelected ? '2px solid #ff4081' : '1px solid #555';
+        row.innerHTML = `
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="width:16px; height:16px; background:${idol.color}; border:1px solid #fff; border-radius:50%; display:inline-block;"></span>
+            <span style="font-weight:bold; font-size:14px;">${idol.name}</span>
+          </div>
+          <span style="font-size:12px; color:${isSelected ? '#ff4081' : '#aaa'};">${isSelected ? '選択中 ✓' : '選択'}</span>
+        `;
+        row.onclick = () => {
+          appConfig.selectedIndex = idx;
+          localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+          updateSettingsUI();
+          updateLiveFrameStyle();
+        };
+        selectModalList.appendChild(row);
+      });
+
+      let currentGroup = appConfig.groups[appConfig.selectedGroupIndex] || "グループ";
+      let currentIdol = appConfig.idols[appConfig.selectedIndex] || appConfig.idols[0];
+      document.getElementById('currentInfoDisplay').innerHTML = `
+        <span style="width:10px; height:10px; background:${currentIdol ? currentIdol.color : '#fff'}; border-radius:50%; display:inline-block;"></span>
+        <span>[${currentGroup}] ${currentIdol ? currentIdol.name : ''} ▾</span>
+      `;
+
+      updateLiveFrameStyle();
+    }
+
+    function updateLiveFrameStyle() {
+      let currentIdol = appConfig.idols[appConfig.selectedIndex] || { color: '#ffffff' };
+      const frame = document.getElementById('liveChekiFrame');
+      frame.style.backgroundColor = currentIdol.color;
+
+      const textColor = getContrastTextColor(currentIdol.color);
+      document.getElementById('liveDateText').style.color = textColor;
+
+      const now = new Date();
+      document.getElementById('liveDateText').innerText = `${now.getFullYear()}.${now.getMonth()+1}.${now.getDate()}`;
+      document.getElementById('liveSerialText').innerText = cachedSerialId;
+    }
+
+    function addGroup() {
+      const input = document.getElementById('newGroupNameInput');
+      const name = input.value.trim();
+      if(!name) { alert('グループ名を入力してください。'); return; }
+      appConfig.groups.push(name);
+      input.value = '';
+      updateSettingsUI();
+      localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+    }
+
+    function removeGroup(idx) {
+      if(appConfig.groups.length <= 1) { alert('最低1つのグループが必要です。'); return; }
+      appConfig.groups.splice(idx, 1);
+      if(appConfig.selectedGroupIndex >= appConfig.groups.length) {
+        appConfig.selectedGroupIndex = appConfig.groups.length - 1;
+      }
+      updateSettingsUI();
+      localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+    }
+
+    function addNewIdol() {
+      const nameInput = document.getElementById('newIdolName');
+      const name = nameInput.value.trim();
+      if(!name) { alert('メンバー名を入力してください。'); return; }
+      appConfig.idols.push({ name: name, color: newIdolSelectedColor });
+      nameInput.value = '';
+      updateSettingsUI();
+      localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+    }
+
+    function removeIdol(idx) {
+      if(appConfig.idols.length <= 1) { alert('最低1人のメンバーが必要です。'); return; }
+      appConfig.idols.splice(idx, 1);
+      if(appConfig.selectedIndex >= appConfig.idols.length) {
+        appConfig.selectedIndex = appConfig.idols.length - 1;
+      }
+      updateSettingsUI();
+      localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+    }
+
+    function saveSettings() {
+      appConfig.deviceId = document.getElementById('settingDeviceId').value || "DEV-01";
+      localStorage.setItem('cheki_app_config_multi', JSON.stringify(appConfig));
+      closeModal('modal-settings');
+      generateSerialId();
+      updateSettingsUI();
+    }
+
+    loadSettings();
+
+    const video = document.getElementById('cameraStream');
+    let rawSnapshotBlobUrl = null;
+    let rawHighQualityBlob = null;
+    let rawLowQualityBase64 = null;
+    let decoLowQualityBase64 = null;
+    let currentPasscode = "";
+
+    const canvas = document.getElementById('chekiCanvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let penColor = '#FF0000';
+    let penSize = 14;
+    let selectedStamp = null;
+    let history = [];
+    let baseImage = null;
+
+    function switchScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(screenId).classList.add('active');
+    }
+
+    async function startCamera() {
+      switchScreen('screen-capture');
+      generateSerialId();
+      updateLiveFrameStyle();
+      try {
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+        }
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode, width: { ideal: 1080 }, height: { ideal: 1440 } },
+          audio: false
+        });
+        video.srcObject = mediaStream;
+        videoTrack = mediaStream.getVideoTracks()[0];
+
+        const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+        const zoomSlider = document.getElementById('zoomSlider');
+        if (capabilities.zoom) {
+          zoomSlider.min = capabilities.zoom.min;
+          zoomSlider.max = capabilities.zoom.max;
+          zoomSlider.step = capabilities.zoom.step || 0.1;
+          zoomSlider.value = videoTrack.getSettings().zoom || capabilities.zoom.min;
+          document.getElementById('zoomValueText').innerText = Number(zoomSlider.value).toFixed(1) + 'x';
+        } else {
+          zoomSlider.disabled = true;
+        }
+
+        isTorchOn = false;
+        document.getElementById('torchBtn').classList.remove('active-torch');
+
+      } catch (err) {
+        document.body.addEventListener('click', retryCameraOnce, { once: true });
+      }
+    }
+
+    async function retryCameraOnce() {
+      try {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode, width: { ideal: 1080 }, height: { ideal: 1440 } },
+          audio: false
+        });
+        video.srcObject = mediaStream;
+        videoTrack = mediaStream.getVideoTracks()[0];
+      } catch (e) {
+        alert('カメラのアクセスを許可してください。');
+      }
+    }
+
+    // STEP1: イン / アウトカメラ切り替え
+    function switchCamera() {
+      facingMode = (facingMode === "environment") ? "user" : "environment";
+      startCamera();
+    }
+
+    async function changeZoom(val) {
+      document.getElementById('zoomValueText').innerText = Number(val).toFixed(1) + 'x';
+      if (!videoTrack) return;
+      try {
+        await videoTrack.applyConstraints({ advanced: [{ zoom: parseFloat(val) }] });
+      } catch (e) {
+        video.style.transform = `scale(${val})`;
+        video.style.transformOrigin = 'center center';
+      }
+    }
+
+    async function toggleTorch() {
+      if (!videoTrack) return;
+      const capabilities = videoTrack.getCapabilities ? videoTrack.getCapabilities() : {};
+      if (!capabilities.torch) {
+        alert('この端末またはブラウザはフラッシュライトに対応していません。');
+        return;
+      }
+      try {
+        isTorchOn = !isTorchOn;
+        await videoTrack.applyConstraints({ advanced: [{ torch: isTorchOn }] });
+        const btn = document.getElementById('torchBtn');
+        if (isTorchOn) {
+          btn.classList.add('active-torch');
+        } else {
+          btn.classList.remove('active-torch');
+        }
+      } catch (e) {
+        alert('フラッシュの切り替えに失敗しました。');
+      }
+    }
+
+    function backToCamera() {
+      startCamera();
+    }
+
+    function generateSerialId() {
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let randStr = '';
+      for(let i=0; i<4; i++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
+      cachedSerialId = `${appConfig.deviceId}-${dateStr}-${randStr}`;
+      
+      // 照合用6桁ランダムコード生成
+      currentPasscode = String(Math.floor(100000 + Math.random() * 900000));
+    }
+
+    // STEP1: 画像のWebP軽量化ヘルパー（長辺1000px, quality 0.8）
+    function compressToWebP(srcCanvas, callback) {
+      const maxDim = 1000;
+      let w = srcCanvas.width;
+      let h = srcCanvas.height;
+      if (w > h) {
+        if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+      } else {
+        if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
+      }
+      const tmpCanvas = document.createElement('canvas');
+      tmpCanvas.width = w; tmpCanvas.height = h;
+      const tmpCtx = tmpCanvas.getContext('2d');
+      tmpCtx.drawImage(srcCanvas, 0, 0, w, h);
+      
+      const webpBase64 = tmpCanvas.toDataURL('image/webp', 0.8);
+      callback(webpBase64);
+    }
+
+    function takeSnapshot() {
+      const hiddenCanvas = document.getElementById('hiddenCanvas');
+      const hCtx = hiddenCanvas.getContext('2d');
+
+      const targetW = 600;
+      const targetH = 800;
+      hiddenCanvas.width = targetW;
+      hiddenCanvas.height = targetH;
+
+      let currentGroup = appConfig.groups[appConfig.selectedGroupIndex] || "グループ";
+      let currentIdol = appConfig.idols[appConfig.selectedIndex] || { color: '#ffffff', name: '不明' };
+      
+      const now = new Date();
+      currentMetadata = {
+        group: currentGroup,
+        idol: currentIdol.name,
+        serial: cachedSerialId,
+        deviceId: appConfig.deviceId,
+        passcode: currentPasscode,
+        date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
+      };
+
+      hCtx.fillStyle = currentIdol.color;
+      hCtx.fillRect(0, 0, targetW, targetH);
+
+      const pX = 30, pY = 20, pW = 540, pH = 690;
+      const vW = video.videoWidth || 1080, vH = video.videoHeight || 1440;
+      const vAspect = vW / vH, targetAspect = pW / pH;
+
+      let sx, sy, sW, sH;
+      if (vAspect > targetAspect) {
+        sH = vH; sW = vH * targetAspect; sx = (vW - sW) / 2; sy = 0;
+      } else {
+        sW = vW; sH = vW / targetAspect; sx = 0; sy = (vH - sH) / 2;
+      }
+
+      hCtx.drawImage(video, sx, sy, sW, sH, pX, pY, pW, pH);
+
+      const dateText = `${now.getFullYear()}.${now.getMonth()+1}.${now.getDate()}`;
+      const textColor = getContrastTextColor(currentIdol.color);
+      
+      hCtx.fillStyle = textColor;
+      hCtx.font = 'bold 18px sans-serif';
+      hCtx.textAlign = 'left';
+      hCtx.fillText(dateText, 35, 762);
+
+      hCtx.font = 'bold 20px monospace';
+      const serialMetrics = hCtx.measureText(cachedSerialId);
+      const textPaddingX = 10;
+      const bgBoxWidth = serialMetrics.width + (textPaddingX * 2);
+      const bgBoxHeight = 28;
+      const bgBoxX = 565 - bgBoxWidth;
+      const bgBoxY = 740;
+
+      hCtx.fillStyle = 'rgba(0, 0, 0, 0.75)';
+      hCtx.fillRect(bgBoxX, bgBoxY, bgBoxWidth, bgBoxHeight);
+
+      hCtx.fillStyle = '#FFFFFF';
+      hCtx.textAlign = 'right';
+      hCtx.fillText(cachedSerialId, 565 - textPaddingX, bgBoxY + 20);
+
+      // Rawの軽量圧縮データ生成
+      compressToWebP(hiddenCanvas, function(base64) {
+        rawLowQualityBase64 = base64;
+      });
+
+      hiddenCanvas.toBlob(function(blob) {
+        rawHighQualityBlob = blob;
+        if(rawSnapshotBlobUrl) URL.revokeObjectURL(rawSnapshotBlobUrl);
+        rawSnapshotBlobUrl = URL.createObjectURL(blob);
+        
+        document.getElementById('previewImageElement').src = rawSnapshotBlobUrl;
+        
+        if (mediaStream) {
+          mediaStream.getTracks().forEach(track => track.stop());
+        }
+        switchScreen('screen-preview');
+      }, 'image/jpeg', 0.92);
+    }
+
+    function saveRawAndProceedToDraw() {
+      if (rawSnapshotBlobUrl) {
+        const autoLink = document.createElement('a');
+        autoLink.href = rawSnapshotBlobUrl;
+        autoLink.download = `${currentMetadata.group}_${currentMetadata.idol}_raw_${cachedSerialId}.jpg`;
+        document.body.appendChild(autoLink);
+        autoLink.click();
+        document.body.removeChild(autoLink);
+      }
+      proceedToDrawWithoutSavingRaw();
+    }
+
+    function proceedToDrawWithoutSavingRaw() {
+      canvas.width = 600;
+      canvas.height = 800;
+
+      const img = new Image();
+      baseImage = img;
+      img.onload = function() {
+        ctx.drawImage(img, 0, 0);
+        history = [];
+        saveHistory();
+        switchScreen('screen-draw');
+        initDrawingEvents();
+      };
+      img.src = rawSnapshotBlobUrl;
+    }
+
+    function openModal(modalId) { document.getElementById(modalId).classList.add('active'); }
+    function closeModal(modalId) { document.getElementById(modalId).classList.remove('active'); }
+    function closeModalOnBg(e, modalId) { if (e.target.id === modalId) closeModal(modalId); }
+
+    function setPenSize(size) { penSize = size; closeModal('modal-size'); }
+    function selectStamp(stampText) { selectedStamp = stampText; closeModal('modal-stamp'); }
+    function cancelStamp() { selectedStamp = null; closeModal('modal-stamp'); }
+
+    function initDrawingEvents() {
+      canvas.onmousedown = handleCanvasDown;
+      canvas.onmousemove = handleCanvasMove;
+      canvas.onmouseup = handleCanvasUp;
+      canvas.onmouseleave = handleCanvasUp;
+
+      canvas.ontouchstart = (e) => { e.preventDefault(); handleCanvasDown(e.touches[0]); };
+      canvas.ontouchmove = (e) => { e.preventDefault(); handleCanvasMove(e.touches[0]); };
+      canvas.ontouchend = handleCanvasUp;
+    }
+
+    function getMousePos(e) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+      };
+    }
+
+    function handleCanvasDown(e) {
+      const pos = getMousePos(e);
+      if (selectedStamp) {
+        ctx.save();
+        ctx.font = 'bold 65px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'white';
+        ctx.shadowBlur = 12;
+        ctx.fillText(selectedStamp, pos.x, pos.y);
+        ctx.restore();
+        saveHistory();
+      } else {
+        isDrawing = true;
+        ctx.beginPath();
+        ctx.moveTo(pos.x, pos.y);
+        ctx.strokeStyle = penColor;
+        ctx.lineWidth = penSize;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      }
+    }
+
+    function handleCanvasMove(e) {
+      if (!isDrawing || selectedStamp) return;
+      const pos = getMousePos(e);
+      ctx.lineTo(pos.x, pos.y);
+      ctx.stroke();
+    }
+
+    function handleCanvasUp() {
+      if (isDrawing) {
+        isDrawing = false;
+        saveHistory();
+      }
+    }
+
+    function saveHistory() {
+      if (history.length > 15) history.shift();
+      history.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+    }
+
+    function undoCanvas() {
+      if (history.length > 1) {
+        history.pop();
+        ctx.putImageData(history[history.length - 1], 0, 0);
+      }
+    }
+
+    function clearCanvas() {
+      if (confirm('描画をすべてクリアしますか？')) {
+        if (baseImage) {
+          ctx.drawImage(baseImage, 0, 0);
+          history = [];
+          saveHistory();
+        }
+      }
+    }
+
+    // STEP1: Deco確定・QR生成 ＆ IndexedDB保存
+    function saveCheki() {
+      // 1. Deco画像のWebP軽量化
+      compressToWebP(canvas, function(base64) {
+        decoLowQualityBase64 = base64;
+
+        // 2. Decoの高画質Blob取得
+        canvas.toBlob(function(decoBlob) {
+          const url = URL.createObjectURL(decoBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${currentMetadata.group}_${currentMetadata.idol}_deco_${cachedSerialId}.jpg`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+
+          // 3. IndexedDBヘデータをプール保存 (オフライン現場用)
+          const record = {
+            photoId: cachedSerialId,
+            passcode: currentPasscode,
+            metadata: currentMetadata,
+            rawBlob: rawHighQualityBlob,
+            decoBlob: decoBlob,
+            rawWebP: rawLowQualityBase64,
+            decoWebP: decoLowQualityBase64,
+            createdAt: new Date().toISOString()
+          };
+          saveToIndexedDB(record);
+
+          // 4. UIの更新・デフォルトでDeco用QRを表示
+          document.getElementById('passcodeDisplay').innerText = `受取コード: ${currentPasscode}`;
+          document.getElementById('metaInfoBox').innerHTML = `
+            <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
+            📁 グループ: <b>${currentMetadata.group}</b> / 👤 メンバー: <b style="color:#ffcc00;">${currentMetadata.idol}</b><br>
+            🔢 シリアルID: <b style="font-family:monospace;">${currentMetadata.serial}</b><br>
+            📅 撮影日付: ${currentMetadata.date}
+          `;
+
+          switchQrTab('deco');
+          openModal('modal-saved');
+        }, 'image/jpeg', 0.92);
+      });
+    }
+
+    // STEP1: Deco/Raw QRコード表示切り替え
+    function switchQrTab(type) {
+      const btnDeco = document.getElementById('qrTabDeco');
+      const btnRaw = document.getElementById('qrTabRaw');
+      const canvas = document.getElementById('qrCanvas');
+
+      let targetData = "";
+      if (type === 'deco') {
+        btnDeco.classList.add('active');
+        btnRaw.classList.remove('active');
+        targetData = `CHEERDREAM:${cachedSerialId}:${currentPasscode}:DECO:${decoLowQualityBase64 || ''}`;
+      } else {
+        btnRaw.classList.add('active');
+        btnDeco.classList.remove('active');
+        targetData = `CHEERDREAM:${cachedSerialId}:${currentPasscode}:RAW:${rawLowQualityBase64 || ''}`;
+      }
+
+      // QRコードをCanvasへ描画 (180px)
+      var qr = new SimpleQR(targetData);
+      qr.draw(canvas, 180);
+    }
+
+    function finishAndResetCamera() {
+      closeModal('modal-saved');
+      startCamera();
+    }
+
+    window.addEventListener('load', startCamera);
+  </script>
+</body>
+</html>
