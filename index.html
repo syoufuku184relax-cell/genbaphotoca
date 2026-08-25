@@ -3,7 +3,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>特典会チェキアプリ（PWA STEP1修復版）</title>
+  <title>特典会チェキアプリ（修正版）</title>
+  <!-- 確実に機能するQRコード生成ライブラリを読み込み -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     html, body {
       width: 100%; height: 100%;
@@ -179,7 +181,7 @@
       border-radius: 8px;
       border: 2px solid rgba(255,255,255,0.4);
       font-weight: bold;
-      font-size: 12px;
+      font-size: 11px;
       cursor: pointer;
       text-align: center;
       box-shadow: 0 2px 4px rgba(0,0,0,0.3);
@@ -227,8 +229,19 @@
     .qr-tab-container { display: flex; gap: 8px; margin: 10px 0 5px 0; }
     .qr-tab-btn { flex: 1; padding: 8px; font-size: 12px; background: #333; color: #ccc; border-radius: 8px; border: 1px solid #555; }
     .qr-tab-btn.active { background: #ff4081; color: white; border-color: #ff4081; }
-    .qr-display-area { background: #fff; padding: 10px; border-radius: 8px; display: inline-block; margin: 5px 0; }
-    .qr-display-area canvas { display: block; }
+    
+    .qr-display-area {
+      background: #fff;
+      padding: 12px;
+      border-radius: 12px;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      margin: 10px auto;
+      width: 180px;
+      height: 180px;
+      box-sizing: border-box;
+    }
   </style>
 </head>
 <body>
@@ -349,7 +362,7 @@
       </div>
 
       <div class="qr-display-area">
-        <canvas id="qrCanvas"></canvas>
+        <div id="qrcode"></div>
       </div>
       <div id="passcodeDisplay" style="font-size:13px; font-weight:bold; color:#ffcc00; margin-bottom:6px;">受取コード: ------</div>
 
@@ -381,7 +394,6 @@
         <input type="text" id="newIdolName" placeholder="メンバー名を入力" style="font-size:12px; padding:6px; margin-bottom:6px;">
         <label style="font-size: 11px; color: #aaa; margin-bottom: 4px; display:block;">メンバーカラーを選択 (タップで選択):</label>
         
-        <!-- 修正: メンカラ選択用パレット -->
         <div id="settingColorPaletteContainer" class="color-palette-grid" style="margin-bottom:6px;"></div>
         <div id="selectedColorPreview" style="font-size: 11px; margin-bottom: 6px; color: #ffcc00; font-weight: bold;">選択中カラー: 赤 (#FF0000)</div>
         <button class="pop-btn" style="width: 100%; background: #449d44; padding: 8px; font-size: 13px;" onclick="addNewIdol()">メンバーを追加する</button>
@@ -394,58 +406,16 @@
     </div>
   </div>
 
-  <!-- QRコード生成エンジン -->
   <script>
-    var SimpleQR = (function() {
-      function QR(text) { this.text = text; }
-      QR.prototype.draw = function(canvas, size) {
-        var ctx = canvas.getContext('2d');
-        canvas.width = size; canvas.height = size;
-        ctx.fillStyle = "#FFFFFF"; ctx.fillRect(0, 0, size, size);
-        ctx.fillStyle = "#000000";
-        
-        var str = this.text;
-        var modules = 25;
-        var cellSize = size / modules;
-        
-        function drawPattern(x, y) {
-          ctx.fillRect(x * cellSize, y * cellSize, 7 * cellSize, 7 * cellSize);
-          ctx.fillStyle = "#FFFFFF";
-          ctx.fillRect((x+1) * cellSize, (y+1) * cellSize, 5 * cellSize, 5 * cellSize);
-          ctx.fillStyle = "#000000";
-          ctx.fillRect((x+2) * cellSize, (y+2) * cellSize, 3 * cellSize, 3 * cellSize);
-        }
-        drawPattern(0, 0);
-        drawPattern(modules - 7, 0);
-        drawPattern(0, modules - 7);
-
-        var hash = 0;
-        for (var i = 0; i < str.length; i++) {
-          hash = ((hash << 5) - hash) + str.charCodeAt(i);
-          hash |= 0;
-        }
-        for (var r = 0; r < modules; r++) {
-          for (var c = 0; c < modules; c++) {
-            if ((r < 8 && c < 8) || (r < 8 && c > modules - 9) || (r > modules - 9 && c < 8)) continue;
-            var bit = ((hash ^ (r * 31 + c * 17)) & 1);
-            if (bit) {
-              ctx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-            }
-          }
-        }
-      };
-      return QR;
-    })();
-  </script>
-
-  <script>
+    // カラーパレット設定（要望通り修正・追加）
     const COLOR_PALETTE = [
       { name: "赤", code: "#FF0000" },
       { name: "青", code: "#0000FF" },
       { name: "黄", code: "#FFFF00" },
-      { name: "紫", code: "#800080" },
+      { name: "紫", code: "#FF00FF" }, // 修正: ff00ff
       { name: "ピンク", code: "#FF69B4" },
-      { name: "緑", code: "#008000" },
+      { name: "緑", code: "#00FF00" }, // 修正: 明るい緑
+      { name: "エメラルド", code: "#50C878" }, // 追加: エメラルドグリーン
       { name: "水色", code: "#00BFFF" },
       { name: "オレンジ", code: "#FFA500" },
       { name: "白", code: "#FFFFFF" },
@@ -480,6 +450,7 @@
     let videoTrack = null;
     let isTorchOn = false;
     let facingMode = "environment";
+    let qrcodeObj = null;
 
     // IndexedDB
     let db = null;
@@ -524,7 +495,6 @@
       updateSettingsUI();
     }
 
-    // メンカラ選択機能の修復
     function buildColorPalettes() {
       const settingContainer = document.getElementById('settingColorPaletteContainer');
       if (settingContainer) {
@@ -559,7 +529,7 @@
           btn.className = 'palette-btn';
           btn.style.backgroundColor = item.code;
           btn.style.color = getContrastTextColor(item.code);
-          btn.style.padding = '14px 4px';
+          btn.style.padding = '12px 2px';
           btn.innerText = item.name;
           btn.onclick = () => {
             penColor = item.code;
@@ -734,7 +704,6 @@
       document.getElementById(screenId).classList.add('active');
     }
 
-    // カメラ起動処理の修正・互換性向上
     async function startCamera() {
       switchScreen('screen-capture');
       generateSerialId();
@@ -778,8 +747,6 @@
         }
         isTorchOn = false;
         document.getElementById('torchBtn').classList.remove('active-torch');
-      } else {
-        alert('カメラの起動に失敗しました。ブラウザのカメラアクセス許可を確認してください。');
       }
     }
 
@@ -832,24 +799,6 @@
       for(let i=0; i<4; i++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
       cachedSerialId = `${appConfig.deviceId}-${dateStr}-${randStr}`;
       currentPasscode = String(Math.floor(100000 + Math.random() * 900000));
-    }
-
-    function compressToWebP(srcCanvas, callback) {
-      const maxDim = 1000;
-      let w = srcCanvas.width;
-      let h = srcCanvas.height;
-      if (w > h) {
-        if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
-      } else {
-        if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
-      }
-      const tmpCanvas = document.createElement('canvas');
-      tmpCanvas.width = w; tmpCanvas.height = h;
-      const tmpCtx = tmpCanvas.getContext('2d');
-      tmpCtx.drawImage(srcCanvas, 0, 0, w, h);
-      
-      const webpBase64 = tmpCanvas.toDataURL('image/webp', 0.8);
-      callback(webpBase64);
     }
 
     function takeSnapshot() {
@@ -912,10 +861,6 @@
       hCtx.fillStyle = '#FFFFFF';
       hCtx.textAlign = 'right';
       hCtx.fillText(cachedSerialId, 565 - textPaddingX, bgBoxY + 20);
-
-      compressToWebP(hiddenCanvas, function(base64) {
-        rawLowQualityBase64 = base64;
-      });
 
       hiddenCanvas.toBlob(function(blob) {
         rawHighQualityBlob = blob;
@@ -1048,62 +993,69 @@
     }
 
     function saveCheki() {
-      compressToWebP(canvas, function(base64) {
-        decoLowQualityBase64 = base64;
+      canvas.toBlob(function(decoBlob) {
+        const url = URL.createObjectURL(decoBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${currentMetadata.group}_${currentMetadata.idol}_deco_${cachedSerialId}.jpg`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
 
-        canvas.toBlob(function(decoBlob) {
-          const url = URL.createObjectURL(decoBlob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = `${currentMetadata.group}_${currentMetadata.idol}_deco_${cachedSerialId}.jpg`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
+        const record = {
+          photoId: cachedSerialId,
+          passcode: currentPasscode,
+          metadata: currentMetadata,
+          rawBlob: rawHighQualityBlob,
+          decoBlob: decoBlob,
+          createdAt: new Date().toISOString()
+        };
+        saveToIndexedDB(record);
 
-          const record = {
-            photoId: cachedSerialId,
-            passcode: currentPasscode,
-            metadata: currentMetadata,
-            rawBlob: rawHighQualityBlob,
-            decoBlob: decoBlob,
-            rawWebP: rawLowQualityBase64,
-            decoWebP: decoLowQualityBase64,
-            createdAt: new Date().toISOString()
-          };
-          saveToIndexedDB(record);
+        document.getElementById('passcodeDisplay').innerText = `受取コード: ${currentPasscode}`;
+        document.getElementById('metaInfoBox').innerHTML = `
+          <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
+          📁 グループ: <b>${currentMetadata.group}</b> / 👤 メンバー: <b style="color:#ffcc00;">${currentMetadata.idol}</b><br>
+          🔢 シリアルID: <b style="font-family:monospace;">${currentMetadata.serial}</b><br>
+          📅 撮影日付: ${currentMetadata.date}
+        `;
 
-          document.getElementById('passcodeDisplay').innerText = `受取コード: ${currentPasscode}`;
-          document.getElementById('metaInfoBox').innerHTML = `
-            <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
-            📁 グループ: <b>${currentMetadata.group}</b> / 👤 メンバー: <b style="color:#ffcc00;">${currentMetadata.idol}</b><br>
-            🔢 シリアルID: <b style="font-family:monospace;">${currentMetadata.serial}</b><br>
-            📅 撮影日付: ${currentMetadata.date}
-          `;
-
-          switchQrTab('deco');
-          openModal('modal-saved');
-        }, 'image/jpeg', 0.92);
-      });
+        switchQrTab('deco');
+        openModal('modal-saved');
+      }, 'image/jpeg', 0.92);
     }
 
+    // 正しいQRコードの表示処理
     function switchQrTab(type) {
       const btnDeco = document.getElementById('qrTabDeco');
       const btnRaw = document.getElementById('qrTabRaw');
-      const canvas = document.getElementById('qrCanvas');
+      const qrContainer = document.getElementById('qrcode');
 
-      let targetData = "";
+      qrContainer.innerHTML = ''; // クリア
+
+      let payload = {
+        id: cachedSerialId,
+        code: currentPasscode,
+        type: type.toUpperCase()
+      };
+
       if (type === 'deco') {
         btnDeco.classList.add('active');
         btnRaw.classList.remove('active');
-        targetData = `CHEERDREAM:${cachedSerialId}:${currentPasscode}:DECO:${decoLowQualityBase64 || ''}`;
       } else {
         btnRaw.classList.add('active');
         btnDeco.classList.remove('active');
-        targetData = `CHEERDREAM:${cachedSerialId}:${currentPasscode}:RAW:${rawLowQualityBase64 || ''}`;
       }
 
-      var qr = new SimpleQR(targetData);
-      qr.draw(canvas, 180);
+      // 標準QRコード生成（読み取りエラーを完全に回避）
+      qrcodeObj = new QRCode(qrContainer, {
+        text: JSON.stringify(payload),
+        width: 156,
+        height: 156,
+        colorDark: "#000000",
+        colorLight: "#ffffff",
+        correctLevel: QRCode.CorrectLevel.M
+      });
     }
 
     function finishAndResetCamera() {
