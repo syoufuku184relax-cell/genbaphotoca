@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>特典会チェキアプリ（修正版）</title>
-  <!-- 確実に機能するQRコード生成ライブラリを読み込み -->
+  <title>特典会チェキアプリ（QR画像埋め込み対応版）</title>
+  <!-- 高密度対応QRコードライブラリ -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <style>
     html, body {
@@ -232,14 +232,14 @@
     
     .qr-display-area {
       background: #fff;
-      padding: 12px;
+      padding: 8px;
       border-radius: 12px;
       display: flex;
       justify-content: center;
       align-items: center;
       margin: 10px auto;
-      width: 180px;
-      height: 180px;
+      width: 210px;
+      height: 210px;
       box-sizing: border-box;
     }
   </style>
@@ -355,16 +355,16 @@
   <div id="modal-saved" class="modal-overlay">
     <div class="modal-content" style="text-align:center;">
       <div class="modal-title" style="color:#28a745;">💾 保存・QR生成完了！</div>
+      <div style="font-size: 11px; color: #ccc;">スマホのカメラでスキャンして画像を保存できます</div>
       
       <div class="qr-tab-container">
-        <button id="qrTabDeco" class="qr-tab-btn active" onclick="switchQrTab('deco')">デコ後 QR</button>
-        <button id="qrTabRaw" class="qr-tab-btn" onclick="switchQrTab('raw')">デコ前(Raw) QR</button>
+        <button id="qrTabDeco" class="qr-tab-btn active" onclick="switchQrTab('deco')">デコ後 写真QR</button>
+        <button id="qrTabRaw" class="qr-tab-btn" onclick="switchQrTab('raw')">デコ前 写真QR</button>
       </div>
 
       <div class="qr-display-area">
         <div id="qrcode"></div>
       </div>
-      <div id="passcodeDisplay" style="font-size:13px; font-weight:bold; color:#ffcc00; margin-bottom:6px;">受取コード: ------</div>
 
       <div id="metaInfoBox" style="font-size:11px; color:#fff; background:#181818; padding:8px; border-radius:4px; margin-bottom:10px; text-align:left; border: 1px solid #444;"></div>
       <button class="btn-main" style="width:100%; padding:10px; margin-top:5px;" onclick="finishAndResetCamera()">次の撮影へ 📸</button>
@@ -385,21 +385,22 @@
         <div id="groupListContainer" style="max-height: 80px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818; margin-bottom:4px;"></div>
         <div style="display:flex; gap:4px;">
           <input type="text" id="newGroupNameInput" placeholder="新しいグループ名" style="font-size:12px; padding:6px;">
-          <button class="pop-btn" style="width:90px; background:#449d44; padding:6px; font-size:11px;" onclick="addGroup()">追加</button>
+          <button class="pop-btn" style="width:90px; background:#28a745; padding:6px; font-size:11px;" onclick="addGroup()">追加</button>
         </div>
       </div>
 
+      <!-- メンバー設定（要求通り登録一覧をメンバー追加の上に配置） -->
       <div class="setting-group">
-        <label>メンバー追加 ＆ メンカラ選択</label>
+        <label style="font-weight:bold; color:#ff4081;">登録済みメンバー一覧</label>
+        <div id="idolListContainer" style="max-height: 100px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818; margin-bottom: 12px;"></div>
+
+        <label style="font-weight:bold; color:#fff;">新規メンバー追加 ＆ カラー選択</label>
         <input type="text" id="newIdolName" placeholder="メンバー名を入力" style="font-size:12px; padding:6px; margin-bottom:6px;">
-        <label style="font-size: 11px; color: #aaa; margin-bottom: 4px; display:block;">メンバーカラーを選択 (タップで選択):</label>
+        <label style="font-size: 11px; color: #aaa; margin-bottom: 4px; display:block;">メンバーカラーを選択:</label>
         
         <div id="settingColorPaletteContainer" class="color-palette-grid" style="margin-bottom:6px;"></div>
-        <div id="selectedColorPreview" style="font-size: 11px; margin-bottom: 6px; color: #ffcc00; font-weight: bold;">選択中カラー: 赤 (#FF0000)</div>
-        <button class="pop-btn" style="width: 100%; background: #449d44; padding: 8px; font-size: 13px;" onclick="addNewIdol()">メンバーを追加する</button>
-
-        <label style="margin-top:10px;">登録済みメンバー一覧</label>
-        <div id="idolListContainer" style="max-height: 90px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818;"></div>
+        <div id="selectedColorPreview" style="font-size: 11px; margin-bottom: 6px; color: #ffcc00; font-weight: bold;">選択中カラー: 緑 (#28A745)</div>
+        <button class="pop-btn" style="width: 100%; background: #28a745; padding: 8px; font-size: 13px;" onclick="addNewIdol()">メンバーを追加する</button>
       </div>
 
       <button class="btn-main" style="width:100%; margin-top:5px; padding:10px;" onclick="saveSettings()">設定を保存して閉じる</button>
@@ -407,15 +408,15 @@
   </div>
 
   <script>
-    // カラーパレット設定（要望通り修正・追加）
+    // カラーパレット設定（緑色をボタン等の色と同じ濃い目の緑 #28A745 に調整）
     const COLOR_PALETTE = [
       { name: "赤", code: "#FF0000" },
       { name: "青", code: "#0000FF" },
       { name: "黄", code: "#FFFF00" },
-      { name: "紫", code: "#FF00FF" }, // 修正: ff00ff
+      { name: "紫", code: "#FF00FF" },
       { name: "ピンク", code: "#FF69B4" },
-      { name: "緑", code: "#00FF00" }, // 修正: 明るい緑
-      { name: "エメラルド", code: "#50C878" }, // 追加: エメラルドグリーン
+      { name: "緑", code: "#28A745" }, // 修正: 緑が強い濃い緑(#28A745)
+      { name: "エメラルド", code: "#50C878" },
       { name: "水色", code: "#00BFFF" },
       { name: "オレンジ", code: "#FFA500" },
       { name: "白", code: "#FFFFFF" },
@@ -442,7 +443,7 @@
       selectedIndex: 0
     };
 
-    let newIdolSelectedColor = "#FF0000";
+    let newIdolSelectedColor = "#28A745";
     let cachedSerialId = "";
     let currentMetadata = {};
 
@@ -451,6 +452,10 @@
     let isTorchOn = false;
     let facingMode = "environment";
     let qrcodeObj = null;
+
+    // 超軽量DataURL（QR埋め込み用）
+    let rawLightDataUrl = "";
+    let decoLightDataUrl = "";
 
     // IndexedDB
     let db = null;
@@ -686,9 +691,6 @@
     const video = document.getElementById('cameraStream');
     let rawSnapshotBlobUrl = null;
     let rawHighQualityBlob = null;
-    let rawLowQualityBase64 = null;
-    let decoLowQualityBase64 = null;
-    let currentPasscode = "";
 
     const canvas = document.getElementById('chekiCanvas');
     const ctx = canvas.getContext('2d');
@@ -798,7 +800,16 @@
       let randStr = '';
       for(let i=0; i<4; i++) randStr += chars.charAt(Math.floor(Math.random() * chars.length));
       cachedSerialId = `${appConfig.deviceId}-${dateStr}-${randStr}`;
-      currentPasscode = String(Math.floor(100000 + Math.random() * 900000));
+    }
+
+    // QR埋め込み用に超軽量キャンバスで縮小画像をBase64化する関数
+    function generateLightDataUrl(sourceCanvas, width=150, quality=0.35) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = width;
+      tempCanvas.height = Math.round(width * (4 / 3));
+      const tCtx = tempCanvas.getContext('2d');
+      tCtx.drawImage(sourceCanvas, 0, 0, tempCanvas.width, tempCanvas.height);
+      return tempCanvas.toDataURL('image/jpeg', quality);
     }
 
     function takeSnapshot() {
@@ -819,7 +830,6 @@
         idol: currentIdol.name,
         serial: cachedSerialId,
         deviceId: appConfig.deviceId,
-        passcode: currentPasscode,
         date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`
       };
 
@@ -861,6 +871,9 @@
       hCtx.fillStyle = '#FFFFFF';
       hCtx.textAlign = 'right';
       hCtx.fillText(cachedSerialId, 565 - textPaddingX, bgBoxY + 20);
+
+      // Rawの超軽量画像データを生成
+      rawLightDataUrl = generateLightDataUrl(hiddenCanvas, 140, 0.3);
 
       hiddenCanvas.toBlob(function(blob) {
         rawHighQualityBlob = blob;
@@ -909,7 +922,7 @@
     function closeModalOnBg(e, modalId) { if (e.target.id === modalId) closeModal(modalId); }
 
     function setPenSize(size) { penSize = size; closeModal('modal-size'); }
-    function selectStamp(stampText) { selectedStamp = stampText; closeModal('modal-stamp'); }
+    function selectStamp(stampText) { selectedStamp = stampText; closeModal('modal-size'); closeModal('modal-stamp'); }
     function cancelStamp() { selectedStamp = null; closeModal('modal-stamp'); }
 
     function initDrawingEvents() {
@@ -993,6 +1006,9 @@
     }
 
     function saveCheki() {
+      // デコ後の超軽量画像データを生成
+      decoLightDataUrl = generateLightDataUrl(canvas, 140, 0.3);
+
       canvas.toBlob(function(decoBlob) {
         const url = URL.createObjectURL(decoBlob);
         const link = document.createElement('a');
@@ -1004,7 +1020,6 @@
 
         const record = {
           photoId: cachedSerialId,
-          passcode: currentPasscode,
           metadata: currentMetadata,
           rawBlob: rawHighQualityBlob,
           decoBlob: decoBlob,
@@ -1012,7 +1027,6 @@
         };
         saveToIndexedDB(record);
 
-        document.getElementById('passcodeDisplay').innerText = `受取コード: ${currentPasscode}`;
         document.getElementById('metaInfoBox').innerHTML = `
           <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
           📁 グループ: <b>${currentMetadata.group}</b> / 👤 メンバー: <b style="color:#ffcc00;">${currentMetadata.idol}</b><br>
@@ -1025,7 +1039,7 @@
       }, 'image/jpeg', 0.92);
     }
 
-    // 正しいQRコードの表示処理
+    // カメラで直接スキャンして画像が開くDataURLをQRコードに埋め込む
     function switchQrTab(type) {
       const btnDeco = document.getElementById('qrTabDeco');
       const btnRaw = document.getElementById('qrTabRaw');
@@ -1033,29 +1047,28 @@
 
       qrContainer.innerHTML = ''; // クリア
 
-      let payload = {
-        id: cachedSerialId,
-        code: currentPasscode,
-        type: type.toUpperCase()
-      };
-
+      let targetDataUrl = "";
       if (type === 'deco') {
         btnDeco.classList.add('active');
         btnRaw.classList.remove('active');
+        targetDataUrl = decoLightDataUrl;
       } else {
         btnRaw.classList.add('active');
         btnDeco.classList.remove('active');
+        targetDataUrl = rawLightDataUrl;
       }
 
-      // 標準QRコード生成（読み取りエラーを完全に回避）
-      qrcodeObj = new QRCode(qrContainer, {
-        text: JSON.stringify(payload),
-        width: 156,
-        height: 156,
-        colorDark: "#000000",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.M
-      });
+      // スマホの標準カメラでスキャンした際に直接画像が開くように設定
+      if (targetDataUrl) {
+        qrcodeObj = new QRCode(qrContainer, {
+          text: targetDataUrl,
+          width: 190,
+          height: 190,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.L // 容量最大化のためにLレベルを使用
+        });
+      }
     }
 
     function finishAndResetCamera() {
