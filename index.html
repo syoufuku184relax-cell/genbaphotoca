@@ -235,12 +235,18 @@
       padding: 8px;
       border-radius: 12px;
       display: flex;
+      flex-direction: column;
       justify-content: center;
       align-items: center;
       margin: 10px auto;
       width: 210px;
-      height: 210px;
+      min-height: 210px;
       box-sizing: border-box;
+    }
+    .qr-display-area img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
     }
   </style>
 </head>
@@ -354,16 +360,17 @@
 
   <div id="modal-saved" class="modal-overlay">
     <div class="modal-content" style="text-align:center;">
-      <div class="modal-title" style="color:#28a745;">💾 保存・QR生成完了！</div>
-      <div style="font-size: 11px; color: #ccc;">スマホのカメラでスキャンして画像を保存できます</div>
+      <div class="modal-title" style="color:#28a745;">💾 保存・QR表示完了！</div>
+      <div style="font-size: 11px; color: #ccc;">スキャンでID確認 / 下部にプレビュー表示</div>
       
       <div class="qr-tab-container">
-        <button id="qrTabDeco" class="qr-tab-btn active" onclick="switchQrTab('deco')">デコ後 写真QR</button>
-        <button id="qrTabRaw" class="qr-tab-btn" onclick="switchQrTab('raw')">デコ前 写真QR</button>
+        <button id="qrTabDeco" class="qr-tab-btn active" onclick="switchQrTab('deco')">デコ後 写真</button>
+        <button id="qrTabRaw" class="qr-tab-btn" onclick="switchQrTab('raw')">デコ前 写真</button>
       </div>
 
       <div class="qr-display-area">
         <div id="qrcode"></div>
+        <img id="qrImagePreview" src="" alt="プレビュー" style="display:none; max-height:180px; margin-top:6px; border:1px solid #ccc;">
       </div>
 
       <div id="metaInfoBox" style="font-size:11px; color:#fff; background:#181818; padding:8px; border-radius:4px; margin-bottom:10px; text-align:left; border: 1px solid #444;"></div>
@@ -389,7 +396,6 @@
         </div>
       </div>
 
-      <!-- メンバー設定（要求通り登録一覧をメンバー追加の上に配置） -->
       <div class="setting-group">
         <label style="font-weight:bold; color:#ff4081;">登録済みメンバー一覧</label>
         <div id="idolListContainer" style="max-height: 100px; overflow-y: auto; border: 1px solid #444; border-radius: 6px; padding: 4px; background:#181818; margin-bottom: 12px;"></div>
@@ -408,14 +414,13 @@
   </div>
 
   <script>
-    // カラーパレット設定（緑色をボタン等の色と同じ濃い目の緑 #28A745 に調整）
     const COLOR_PALETTE = [
       { name: "赤", code: "#FF0000" },
       { name: "青", code: "#0000FF" },
       { name: "黄", code: "#FFFF00" },
       { name: "紫", code: "#FF00FF" },
       { name: "ピンク", code: "#FF69B4" },
-      { name: "緑", code: "#28A745" }, // 修正: 緑が強い濃い緑(#28A745)
+      { name: "緑", code: "#28A745" },
       { name: "エメラルド", code: "#50C878" },
       { name: "水色", code: "#00BFFF" },
       { name: "オレンジ", code: "#FFA500" },
@@ -451,9 +456,7 @@
     let videoTrack = null;
     let isTorchOn = false;
     let facingMode = "environment";
-    let qrcodeObj = null;
 
-    // 超軽量DataURL（QR埋め込み用）
     let rawLightDataUrl = "";
     let decoLightDataUrl = "";
 
@@ -802,7 +805,6 @@
       cachedSerialId = `${appConfig.deviceId}-${dateStr}-${randStr}`;
     }
 
-    // QR埋め込み用に超軽量キャンバスで縮小画像をBase64化する関数
     function generateLightDataUrl(sourceCanvas, width=150, quality=0.35) {
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = width;
@@ -872,7 +874,6 @@
       hCtx.textAlign = 'right';
       hCtx.fillText(cachedSerialId, 565 - textPaddingX, bgBoxY + 20);
 
-      // Rawの超軽量画像データを生成
       rawLightDataUrl = generateLightDataUrl(hiddenCanvas, 140, 0.3);
 
       hiddenCanvas.toBlob(function(blob) {
@@ -1005,47 +1006,59 @@
       }
     }
 
+    // 修正ポイント：画像の保存・QR表示処理の修正
     function saveCheki() {
-      // デコ後の超軽量画像データを生成
-      decoLightDataUrl = generateLightDataUrl(canvas, 140, 0.3);
+      try {
+        decoLightDataUrl = generateLightDataUrl(canvas, 140, 0.3);
 
-      canvas.toBlob(function(decoBlob) {
-        const url = URL.createObjectURL(decoBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${currentMetadata.group}_${currentMetadata.idol}_deco_${cachedSerialId}.jpg`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        canvas.toBlob(function(decoBlob) {
+          if (!decoBlob) {
+            alert('画像の作成に失敗しました。');
+            return;
+          }
 
-        const record = {
-          photoId: cachedSerialId,
-          metadata: currentMetadata,
-          rawBlob: rawHighQualityBlob,
-          decoBlob: decoBlob,
-          createdAt: new Date().toISOString()
-        };
-        saveToIndexedDB(record);
+          const url = URL.createObjectURL(decoBlob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `${currentMetadata.group}_${currentMetadata.idol}_deco_${cachedSerialId}.jpg`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
 
-        document.getElementById('metaInfoBox').innerHTML = `
-          <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
-          📁 グループ: <b>${currentMetadata.group}</b> / 👤 メンバー: <b style="color:#ffcc00;">${currentMetadata.idol}</b><br>
-          🔢 シリアルID: <b style="font-family:monospace;">${currentMetadata.serial}</b><br>
-          📅 撮影日付: ${currentMetadata.date}
-        `;
+          const record = {
+            photoId: cachedSerialId,
+            metadata: currentMetadata,
+            rawBlob: rawHighQualityBlob,
+            decoBlob: decoBlob,
+            createdAt: new Date().toISOString()
+          };
+          saveToIndexedDB(record);
 
-        switchQrTab('deco');
-        openModal('modal-saved');
-      }, 'image/jpeg', 0.92);
+          document.getElementById('metaInfoBox').innerHTML = `
+            <b style="color:#ff4081; font-size:12px;">【スタッフ確認用情報】</b><br>
+            📁 グループ: <b>${currentMetadata.group}</b> / 👤 メンバー: <b style="color:#ffcc00;">${currentMetadata.idol}</b><br>
+            🔢 シリアルID: <b style="font-family:monospace;">${currentMetadata.serial}</b><br>
+            📅 撮影日付: ${currentMetadata.date}
+          `;
+
+          switchQrTab('deco');
+          openModal('modal-saved');
+        }, 'image/jpeg', 0.92);
+      } catch (err) {
+        console.error("保存エラー:", err);
+        alert("保存中にエラーが発生しました。次の撮影に進みます。");
+        finishAndResetCamera();
+      }
     }
 
-    // カメラで直接スキャンして画像が開くDataURLをQRコードに埋め込む
+    // 修正ポイント：QR生成の安定化および画像のプレビュー表示切り替え
     function switchQrTab(type) {
       const btnDeco = document.getElementById('qrTabDeco');
       const btnRaw = document.getElementById('qrTabRaw');
       const qrContainer = document.getElementById('qrcode');
+      const imgPreview = document.getElementById('qrImagePreview');
 
-      qrContainer.innerHTML = ''; // クリア
+      qrContainer.innerHTML = ''; 
 
       let targetDataUrl = "";
       if (type === 'deco') {
@@ -1058,21 +1071,44 @@
         targetDataUrl = rawLightDataUrl;
       }
 
-      // スマホの標準カメラでスキャンした際に直接画像が開くように設定
+      // 画像プレビュー表示の設定
       if (targetDataUrl) {
-        qrcodeObj = new QRCode(qrContainer, {
-          text: targetDataUrl,
-          width: 190,
-          height: 190,
+        imgPreview.src = targetDataUrl;
+        imgPreview.style.display = 'block';
+      } else {
+        imgPreview.style.display = 'none';
+      }
+
+      // QRコード埋め込みデータはシリアルIDなどのメタテキストに変更（容量制限回避）
+      const qrTextData = `ID:${currentMetadata.serial}|G:${currentMetadata.group}|M:${currentMetadata.idol}`;
+
+      try {
+        new QRCode(qrContainer, {
+          text: qrTextData,
+          width: 140,
+          height: 140,
           colorDark: "#000000",
           colorLight: "#ffffff",
-          correctLevel: QRCode.CorrectLevel.L // 容量最大化のためにLレベルを使用
+          correctLevel: QRCode.CorrectLevel.M
         });
+      } catch (e) {
+        console.warn("QRコード生成スキップ（代替表示）:", e);
+        qrContainer.innerHTML = '<span style="font-size:10px; color:#666;">QR生成エラー</span>';
       }
     }
 
+    // 修正ポイント：状態初期化とカメラ再初期化
     function finishAndResetCamera() {
       closeModal('modal-saved');
+      
+      // キャンバス描画状態のクリア
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      history = [];
+      baseImage = null;
+      rawLightDataUrl = "";
+      decoLightDataUrl = "";
+
+      // カメラの再開
       startCamera();
     }
 
